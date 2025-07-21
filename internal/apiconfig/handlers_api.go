@@ -45,14 +45,7 @@ func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	}
-
-	respondeWithJSON(w, 201, resp)
+	respondeWithJSON(w, 201, dbUserToUser(user))
 }
 
 func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
@@ -81,15 +74,36 @@ func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		respondWithError(w, 500, fmt.Sprintf("error creating chirp: %v", err))
 	}
 
-	resp := Chirp{
-		ID: chirp.ID,
-		CreatedAt: chirp.CreatedAt,
-		UpdatedAt: chirp.UpdatedAt,
-		Body: chirp.Body,
-		UserID: chirp.UserID,
+	respondeWithJSON(w, 201, dbChirpToChirp(chirp))
+}
+
+func (cfg *apiConfig) HandleListChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.ListChirps(r.Context())
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("error retriveing chirps from db: %v", err))
+		return
 	}
 
-	respondeWithJSON(w, 201, resp)
+	resp := []Chirp{}
+	for _, chirp := range chirps {
+		resp = append(resp, dbChirpToChirp(chirp))
+	}
+
+	respondeWithJSON(w, 200, resp)
+}
+
+func (cfg *apiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprint("error parsing id from url param: %v", err))
+	}
+	chirp, err := cfg.db.GetChirp(r.Context(), id)
+	if err != nil {
+		respondWithError(w, 404, "chirp not found")
+		return
+	}
+
+	respondeWithJSON(w, 200, dbChirpToChirp(chirp))
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -138,4 +152,23 @@ func replaceProfanity(input string) string {
 	}
 
 	return strings.Join(inputSplit, " ")
+}
+
+func dbUserToUser(dbUser database.User) User {
+	return User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	}
+}
+
+func dbChirpToChirp(dbChirp database.Chirp) Chirp {
+	return Chirp{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
 }

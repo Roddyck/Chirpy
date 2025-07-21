@@ -43,8 +43,10 @@ func main() {
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
-	mux.HandleFunc("POST /api/validate_chirp", apiconfig.HandleValidateChirp)
+	mux.HandleFunc("POST /api/chirps", cfg.HandleCreateChirp)
 	mux.HandleFunc("POST /api/users", cfg.HandleCreateUser)
+	mux.HandleFunc("GET /api/chirps", cfg.HandleListChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.HandleGetChirp)
 
 	mux.HandleFunc("GET /admin/metrics", cfg.GetMetrics)
 	mux.HandleFunc("POST /admin/reset", cfg.Reset)

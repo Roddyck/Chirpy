@@ -1,28 +1,34 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
-	"sync/atomic"
+	"os"
+
+	"github.com/Roddyck/Chirpy/internal/apiconfig"
+	"github.com/Roddyck/Chirpy/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
-
-type apiConfig struct {
-	fileserverHits atomic.Int32
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-}
 
 
 func main() {
-	mux := http.NewServeMux()
-	cfg := apiConfig{
-		fileserverHits: atomic.Int32{},
+	godotenv.Load()
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	platform := os.Getenv("PLATFORM")
+
+	dbQueries := database.New(db)
+
+	cfg := apiconfig.New(dbQueries, platform)
+
+	mux := http.NewServeMux()
 
 	httpServer := http.Server{
 		Handler: mux,
@@ -30,18 +36,18 @@ func main() {
 	}
 
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
-	mux.Handle("/app/", cfg.middlewareMetricsInc(fileserverHandler))
+	mux.Handle("/app/", cfg.MiddlewareMetricsInc(fileserverHandler))
 
 	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
-	mux.HandleFunc("POST /api/validate_chirp", handleValidateChirp)
+	mux.HandleFunc("POST /api/validate_chirp", apiconfig.HandleValidateChirp)
+	mux.HandleFunc("POST /api/users", cfg.HandleCreateUser)
 
-	mux.HandleFunc("GET /admin/metrics", cfg.getMetrics)
-	mux.HandleFunc("POST /admin/reset", cfg.reset)
+	mux.HandleFunc("GET /admin/metrics", cfg.GetMetrics)
+	mux.HandleFunc("POST /admin/reset", cfg.Reset)
 
 	log.Fatal(httpServer.ListenAndServe())
 }
-

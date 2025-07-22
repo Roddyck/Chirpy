@@ -12,6 +12,7 @@ type apiConfig struct {
 	db             *database.Queries
 	Platform       string
 	TokenSecret    string
+	PolkaKey       string
 }
 
 func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -21,10 +22,11 @@ func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func New(dbQueries *database.Queries, platform, tokenSecret string) *apiConfig {
+func New(dbQueries *database.Queries, platform, tokenSecret, polkaKey string) *apiConfig {
 	return &apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		Platform:       platform,
+		PolkaKey:       polkaKey,
 	}
 }

@@ -24,10 +24,11 @@ func main() {
 
 	platform := os.Getenv("PLATFORM")
 	tokenSecret := os.Getenv("TOKEN_SECRET")
+	polkaKey := os.Getenv("POLKA_KEY")
 
 	dbQueries := database.New(db)
 
-	cfg := apiconfig.New(dbQueries, platform, tokenSecret)
+	cfg := apiconfig.New(dbQueries, platform, tokenSecret, polkaKey)
 
 	mux := http.NewServeMux()
 
@@ -53,6 +54,8 @@ func main() {
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.HandleDeleteChirp)
 	mux.HandleFunc("POST /api/refresh", cfg.HandleRefresh)
 	mux.HandleFunc("POST /api/revoke", cfg.HandleRevoke)
+
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.HandlePolkaWebhook)
 
 	mux.HandleFunc("GET /admin/metrics", cfg.GetMetrics)
 	mux.HandleFunc("POST /admin/reset", cfg.Reset)

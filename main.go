@@ -23,10 +23,11 @@ func main() {
 	}
 
 	platform := os.Getenv("PLATFORM")
+	tokenSecret := os.Getenv("TOKEN_SECRET")
 
 	dbQueries := database.New(db)
 
-	cfg := apiconfig.New(dbQueries, platform)
+	cfg := apiconfig.New(dbQueries, platform, tokenSecret)
 
 	mux := http.NewServeMux()
 

@@ -11,6 +11,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	Platform       string
+	TokenSecret    string
 }
 
 func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -20,10 +21,10 @@ func (cfg *apiConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func New(dbQueries *database.Queries, platform string) *apiConfig {
+func New(dbQueries *database.Queries, platform, tokenSecret string) *apiConfig {
 	return &apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
-		Platform: platform,
+		Platform:       platform,
 	}
 }

@@ -61,8 +61,14 @@ func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password         string `json:"password"`
+		Email            string `json:"email"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
+	}
+
+	type respParams struct {
+		User
+		Token string
 	}
 
 	params := parameters{}
@@ -72,29 +78,67 @@ func (cfg *apiConfig) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("params.ExpiresInSeconds:", params.ExpiresInSeconds)
+
+	expiresIn := 0
+
+	if params.ExpiresInSeconds == 0 || params.ExpiresInSeconds > 3600 {
+		expiresIn = 3600
+	} else {
+		expiresIn = params.ExpiresInSeconds
+	}
+
+	fmt.Println("expiresIn:", expiresIn)
+
 	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		respondWithError(w, 401, "incorrect password or email")
 		return
 	}
 
+	token, err := auth.MakeJWT(user.ID, cfg.TokenSecret, time.Duration(expiresIn)*time.Second)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("error making authentication token: %v", err))
+		return
+	}
+
 	err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
 	if err != nil {
 		respondWithError(w, 401, "incorrect password or email")
-	    return
+		return
 	}
 
-	respondeWithJSON(w, 200, dbUserToUser(user))
+	resp := respParams{
+		User: dbUserToUser(user),
+		Token: token,
+	}
+
+	respondeWithJSON(w, 200, resp)
 }
 
 func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type chirpParams struct {
 		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "invalid authentication token")
+	    return
+	}
+
+
+	userID, err := auth.ValidateJWT(token, cfg.TokenSecret)
+	fmt.Println("UserId:", userID)
+	fmt.Println("Token:", token)
+	if err != nil {
+		fmt.Printf("error validating jwt: %v", err)
+		respondWithError(w, 401, "invalid authentication token")
+	    return
 	}
 
 	params := chirpParams{}
-	err := json.NewDecoder(r.Body).Decode(&params)
+	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("error decoding request body: %v", err))
 		return
@@ -107,7 +151,7 @@ func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   params.Body,
-		UserID: params.UserID,
+		UserID: userID,
 	})
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("error creating chirp: %v", err))

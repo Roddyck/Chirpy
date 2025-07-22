@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Roddyck/Chirpy/internal/auth"
 	"github.com/Roddyck/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -29,7 +30,8 @@ type Chirp struct {
 
 func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	params := parameters{}
@@ -39,13 +41,50 @@ func (cfg *apiConfig) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.db.CreateUser(r.Context(), params.Email)
+	hash, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("error hashing password: %v", err))
+		return
+	}
+
+	user, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{
+		HashedPassword: hash,
+		Email:          params.Email,
+	})
 	if err != nil {
 		respondWithError(w, 500, fmt.Sprintf("error adding user to db: %v", err))
 		return
 	}
 
 	respondeWithJSON(w, 201, dbUserToUser(user))
+}
+
+func (cfg *apiConfig) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	params := parameters{}
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		respondWithError(w, 500, fmt.Sprintf("error decoding request body: %v", err))
+		return
+	}
+
+	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, 401, "incorrect password or email")
+		return
+	}
+
+	err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
+	if err != nil {
+		respondWithError(w, 401, "incorrect password or email")
+	    return
+	}
+
+	respondeWithJSON(w, 200, dbUserToUser(user))
 }
 
 func (cfg *apiConfig) HandleCreateChirp(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +134,7 @@ func (cfg *apiConfig) HandleListChirps(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) HandleGetChirp(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
-		respondWithError(w, 500, fmt.Sprint("error parsing id from url param: %v", err))
+		respondWithError(w, 500, fmt.Sprintf("error parsing id from url param: %v", err))
 	}
 	chirp, err := cfg.db.GetChirp(r.Context(), id)
 	if err != nil {
